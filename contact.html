@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact | William Lee</title>
+  <meta name="description" content="Get in touch with William Lee. Subscribe to the newsletter for updates on new releases.">
+  <meta name="author" content="William Lee">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-wrapper">
+    
+    <!-- Navigation -->
+    <nav class="nav">
+      <div class="container">
+        <div class="nav-inner">
+          <a href="index.html" class="nav-logo">William Lee</a>
+          
+          <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="about.html" class="nav-link">About</a>
+            <a href="free-reads.html" class="nav-link">Free Reads</a>
+            <a href="shop.html" class="nav-link">Shop</a>
+            <a href="contact.html" class="nav-link active">Contact</a>
+          </div>
+          
+          <a href="contact.html" class="nav-cta nav-cta-desktop">Join Newsletter</a>
+          
+          <button class="nav-mobile-toggle" aria-label="Toggle menu">
+            <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+            <svg class="close-icon" style="display:none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="nav-mobile">
+          <a href="index.html" class="nav-link">Home</a>
+          <a href="about.html" class="nav-link">About</a>
+          <a href="free-reads.html" class="nav-link">Free Reads</a>
+          <a href="shop.html" class="nav-link">Shop</a>
+          <a href="contact.html" class="nav-link active">Contact</a>
+          <a href="contact.html" class="nav-cta">Join Newsletter</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <section class="fade-in">
+        <div class="container">
+          
+          <!-- Header -->
+          <div style="text-align: center; margin-bottom: var(--space-7);">
+            <span class="hero-label">Get in Touch</span>
+            <h1>Contact</h1>
+            <p class="hero-subtitle">
+              Have a question, feedback, or just want to say hello? I'd love to hear from you.
+            </p>
+          </div>
+
+          <!-- Contact Grid -->
+          <div class="contact-grid">
+            
+            <!-- Contact Form -->
+            <div class="contact-form">
+              <h2>Send a Message</h2>
+              
+              <form id="contact-form">
+                <div class="form-group">
+                  <label for="name">Name</label>
+                  <input type="text" id="name" name="name" required placeholder="Your name">
+                </div>
+                
+                <div class="form-group">
+                  <label for="email">Email</label>
+                  <input type="email" id="email" name="email" required placeholder="your@email.com">
+                </div>
+                
+                <div class="form-group">
+                  <label for="subject">Subject</label>
+                  <select id="subject" name="subject">
+                    <option value="general">General Inquiry</option>
+                    <option value="press">Press / Media</option>
+                    <option value="rights">Rights & Licensing</option>
+                    <option value="events">Speaking / Events</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="message">Message</label>
+                  <textarea id="message" name="message" required placeholder="Your message..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Send Message</button>
+              </form>
+              
+              <!-- Success Message (hidden by default, shown by JS) -->
+              <template id="contact-success">
+                <div class="contact-success">
+                  <div class="contact-success-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <h2>Message Sent!</h2>
+                  <p>Thank you for reaching out. I'll get back to you as soon as possible.</p>
+                </div>
+              </template>
+            </div>
+
+            <!-- Newsletter Signup -->
+            <div class="newsletter-card">
+              <h3>Newsletter</h3>
+              <p>
+                Subscribe to receive updates on new releases, free stories, and behind-the-scenes 
+                glimpses into the writing process.
+              </p>
+              
+              <form id="newsletter-form" class="newsletter-form">
+                <input type="email" name="email" required placeholder="your@email.com">
+                <button type="submit" class="btn btn-primary">Subscribe</button>
+              </form>
+              
+              <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: var(--space-4);">
+                No spam. Unsubscribe anytime. Your email is kept private.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+<div class="footer-brand">
+  <h4>William Lee</h4>
+  <p>Supernatural Thriller Author</p>
+
+  <img
+    src="assets/author.webp"
+    alt="William Lee"
+    class="footer-author-photo footer-author-photo--below"
+    loading="lazy"
+    decoding="async"
+  />
+</div>
+          <div class="footer-links">
+            <h5>Quick Links</h5>
+            <ul>
+              <li><a href="index.html">Home</a></li>
+              <li><a href="about.html">About</a></li>
+              <li><a href="free-reads.html">Free Reads</a></li>
+              <li><a href="contact.html">Contact</a></li>
+            </ul>
+          </div>
+          <div class="footer-connect">
+            <h5>Connect With Me</h5>
+            <div class="social-buttons">
+              <a href="https://www.tiktok.com/@william_lee_author" target="_blank" rel="noopener noreferrer" class="social-btn tiktok">Follow me on TikTok</a>
+              <a href="https://instagram.com/william_lee_books" target="_blank" rel="noopener noreferrer" class="social-btn instagram">Follow me on Instagram</a>
+              <a href="https://www.goodreads.com/user/show/174240430-william-lee" target="_blank" rel="noopener noreferrer" class="social-btn goodreads">Review My Goodreads</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>© <span id="copyright-year"></span> William Lee. All rights reserved.</p>
+<div class="company-logo">
+  <span>Website made by</span>
+  <a href="https://solarisai.co.uk" target="_blank" rel="noopener noreferrer" class="company-logo-link">
+    <img
+      src="assets/solarisai.webp"
+      alt="SolarisAI"
+      class="company-logo-img"
+      loading="lazy"
+      decoding="async"
+    />
+  </a>
+</div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
