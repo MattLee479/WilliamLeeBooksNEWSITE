@@ -1,0 +1,14 @@
+{
+  "name": "william-lee-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static client website with Stripe Checkout serverless functions",
+  "scripts": {
+    "dev": "netlify dev",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "stripe": "^18.1.1"
+  }
+}

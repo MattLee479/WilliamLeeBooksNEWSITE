@@ -619,6 +619,502 @@ window.addEventListener('resize', function() {
   }, 250);
 });
 
+/* =========================================================
+   SHOP / BASKET / CHECKOUT (LocalStorage Cart)
+   - Works with Lovable's shop.html / basket.html / checkout.html
+   - Safe to paste at the bottom of your existing script.js
+   ========================================================= */
+
+(() => {
+  "use strict";
+
+  const CART_KEY = "wl_cart_v1";
+
+  // ---------- helpers ----------
+  const moneyToNumber = (text) => {
+    // "£24.99" -> 24.99
+    const n = Number(String(text || "").replace(/[^0-9.]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const formatGBP = (amount) => {
+    const n = Number(amount);
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(
+      Number.isFinite(n) ? n : 0
+    );
+  };
+
+  const clampInt = (val, min, max) => {
+    const n = parseInt(val, 10);
+    if (!Number.isFinite(n)) return min;
+    return Math.min(max, Math.max(min, n));
+  };
+
+  const loadCart = () => {
+    try {
+      const raw = localStorage.getItem(CART_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== "object") return { items: {} };
+      if (!parsed.items || typeof parsed.items !== "object") return { items: {} };
+      return parsed;
+    } catch {
+      return { items: {} };
+    }
+  };
+
+  const saveCart = (cart) => {
+    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+  };
+
+  const clearCart = () => {
+    localStorage.removeItem(CART_KEY);
+  };
+
+  const getCartCount = (cart) =>
+    Object.values(cart.items || {}).reduce((sum, item) => sum + (item.qty || 0), 0);
+
+  const getCartSubtotal = (cart) =>
+    Object.values(cart.items || {}).reduce((sum, item) => sum + (item.qty || 0) * (item.price || 0), 0);
+
+  const updateBasketBadge = () => {
+    const el = document.getElementById("basket-count");
+    if (!el) return;
+    const cart = loadCart();
+    const count = getCartCount(cart);
+    el.textContent = String(count);
+    el.style.display = count > 0 ? "inline-flex" : "none";
+  };
+
+  const toast = (msg) => {
+    // Minimal toast without CSS dependency; safe fallback is alert.
+    // You can replace later with a styled toast component.
+    try {
+      const t = document.createElement("div");
+      t.textContent = msg;
+      t.style.position = "fixed";
+      t.style.left = "50%";
+      t.style.bottom = "18px";
+      t.style.transform = "translateX(-50%)";
+      t.style.padding = "10px 12px";
+      t.style.borderRadius = "10px";
+      t.style.background = "rgba(0,0,0,0.85)";
+      t.style.color = "#fff";
+      t.style.fontSize = "14px";
+      t.style.zIndex = "9999";
+      t.style.maxWidth = "90vw";
+      t.style.textAlign = "center";
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 1400);
+    } catch {
+      alert(msg);
+    }
+  };
+
+  // ---------- cart ops ----------
+  const addToCart = (product) => {
+    if (!product || !product.id) return;
+
+    const cart = loadCart();
+    const existing = cart.items[product.id];
+
+    if (existing) {
+      existing.qty = clampInt((existing.qty || 0) + 1, 1, 999);
+      if (!existing.stripePriceId && product.stripePriceId) {
+        existing.stripePriceId = product.stripePriceId;
+      }
+    } else {
+      cart.items[product.id] = {
+        id: product.id,
+        name: product.name || "Item",
+        price: Number(product.price) || 0,
+        image: product.image || "",
+        stripePriceId: product.stripePriceId || "",
+        qty: 1
+      };
+    }
+
+    saveCart(cart);
+    updateBasketBadge();
+    toast("Added to basket");
+  };
+
+  const setQty = (id, qty) => {
+    const cart = loadCart();
+    if (!cart.items[id]) return;
+    const newQty = clampInt(qty, 0, 999);
+    if (newQty <= 0) {
+      delete cart.items[id];
+    } else {
+      cart.items[id].qty = newQty;
+    }
+    saveCart(cart);
+    updateBasketBadge();
+  };
+
+  const removeItem = (id) => {
+    const cart = loadCart();
+    if (!cart.items[id]) return;
+    delete cart.items[id];
+    saveCart(cart);
+    updateBasketBadge();
+  };
+
+  // ---------- SHOP page wiring ----------
+  const initShop = () => {
+    const buttons = document.querySelectorAll(".btn-add-to-basket[data-product-id]");
+    if (!buttons.length) return;
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        const id = btn.getAttribute("data-product-id");
+        const card = btn.closest(".product-card");
+        if (!id || !card) return;
+
+        const name = card.querySelector(".product-card-name")?.textContent?.trim() || "Item";
+        const priceText = card.querySelector(".product-card-price")?.textContent || "£0.00";
+        const price = moneyToNumber(priceText);
+
+        const imgEl = card.querySelector(".product-card-image img");
+        const image = imgEl?.getAttribute("src") || "";
+        const stripePriceId = btn.getAttribute("data-stripe-price-id") || "";
+
+        addToCart({ id, name, price, image, stripePriceId });
+      });
+    });
+  };
+
+  // ---------- BASKET page rendering ----------
+  const renderBasket = () => {
+    const itemsRoot = document.getElementById("basket-items");
+    if (!itemsRoot) return;
+
+    const emptyState = document.getElementById("basket-empty");
+
+    // remove template .basket-item nodes (keep empty state node)
+    itemsRoot.querySelectorAll(".basket-item").forEach((n) => n.remove());
+
+    const cart = loadCart();
+    const items = Object.values(cart.items || {});
+    const subtotal = getCartSubtotal(cart);
+
+    // Empty state
+    if (!items.length) {
+      if (emptyState) emptyState.style.display = "block";
+      const subtotalEl = document.getElementById("basket-subtotal");
+      const totalEl = document.getElementById("basket-total");
+      if (subtotalEl) subtotalEl.textContent = formatGBP(0);
+      if (totalEl) totalEl.textContent = formatGBP(0);
+      return;
+    }
+    if (emptyState) emptyState.style.display = "none";
+
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "basket-item";
+      row.setAttribute("data-product-id", item.id);
+
+      row.innerHTML = `
+        <div class="basket-item-image">
+          <img src="${item.image || "assets/placeholder.svg"}" alt="Product thumbnail">
+        </div>
+        <div class="basket-item-details">
+          <h4 class="basket-item-name"></h4>
+          <p class="basket-item-price"></p>
+        </div>
+        <div class="basket-item-quantity">
+          <button class="qty-btn qty-decrease" aria-label="Decrease quantity">−</button>
+          <span class="qty-value">${item.qty}</span>
+          <button class="qty-btn qty-increase" aria-label="Increase quantity">+</button>
+        </div>
+        <div class="basket-item-subtotal">${formatGBP(item.qty * item.price)}</div>
+        <button class="basket-item-remove" aria-label="Remove item">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      `;
+
+      row.querySelector(".basket-item-name").textContent = item.name;
+      row.querySelector(".basket-item-price").textContent = formatGBP(item.price);
+
+      itemsRoot.insertBefore(row, emptyState || null);
+    });
+
+    const subtotalEl = document.getElementById("basket-subtotal");
+    const totalEl = document.getElementById("basket-total");
+    if (subtotalEl) subtotalEl.textContent = formatGBP(subtotal);
+    if (totalEl) totalEl.textContent = formatGBP(subtotal); // shipping shown as "calculated at checkout"
+  };
+
+  const initBasketInteractions = () => {
+    const itemsRoot = document.getElementById("basket-items");
+    if (!itemsRoot) return;
+
+    itemsRoot.addEventListener("click", (e) => {
+      const target = e.target.closest("button");
+      if (!target) return;
+
+      const row = target.closest(".basket-item");
+      if (!row) return;
+
+      const id = row.getAttribute("data-product-id");
+      if (!id) return;
+
+      const cart = loadCart();
+      const item = cart.items[id];
+      if (!item) return;
+
+      if (target.classList.contains("qty-increase")) {
+        setQty(id, (item.qty || 0) + 1);
+        renderBasket();
+      }
+
+      if (target.classList.contains("qty-decrease")) {
+        setQty(id, (item.qty || 0) - 1);
+        renderBasket();
+      }
+
+      if (target.classList.contains("basket-item-remove")) {
+        removeItem(id);
+        renderBasket();
+      }
+    });
+  };
+
+  // ---------- CHECKOUT summary rendering ----------
+  const renderCheckoutSummary = () => {
+    const itemsRoot = document.getElementById("checkout-items");
+    if (!itemsRoot) return;
+
+    const cart = loadCart();
+    const items = Object.values(cart.items || {});
+    const subtotal = getCartSubtotal(cart);
+
+    // Replace template summary items
+    itemsRoot.innerHTML = "";
+
+    if (!items.length) {
+      itemsRoot.innerHTML = `<p style="opacity:.8">Your basket is empty. <a href="shop.html">Go to shop</a>.</p>`;
+      const subtotalEl = document.getElementById("checkout-subtotal");
+      const shippingEl = document.getElementById("checkout-shipping");
+      const totalEl = document.getElementById("checkout-total");
+      if (subtotalEl) subtotalEl.textContent = formatGBP(0);
+      if (shippingEl) shippingEl.textContent = formatGBP(0);
+      if (totalEl) totalEl.textContent = formatGBP(0);
+      return;
+    }
+
+    items.forEach((item) => {
+      const line = document.createElement("div");
+      line.className = "checkout-summary-item";
+      line.innerHTML = `
+        <span class="checkout-summary-item-name"></span>
+        <span class="checkout-summary-item-qty">× ${item.qty}</span>
+        <span class="checkout-summary-item-price">${formatGBP(item.qty * item.price)}</span>
+      `;
+      line.querySelector(".checkout-summary-item-name").textContent = item.name;
+      itemsRoot.appendChild(line);
+    });
+
+    // Basic shipping placeholder (match your template £4.99 for now)
+    const subtotalEl = document.getElementById("checkout-subtotal");
+    const shippingEl = document.getElementById("checkout-shipping");
+    const totalEl = document.getElementById("checkout-total");
+
+    if (subtotalEl) subtotalEl.textContent = formatGBP(subtotal);
+    if (shippingEl) shippingEl.textContent = "Calculated at payment";
+    if (totalEl) totalEl.textContent = formatGBP(subtotal);
+  };
+
+  const initCheckoutSubmit = () => {
+    const form = document.getElementById("checkout-form");
+    if (!form) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "1") {
+      clearCart();
+      updateBasketBadge();
+      renderCheckoutSummary();
+      toast("Payment successful. Thank you for your order.");
+      window.history.replaceState({}, "", "checkout.html");
+    } else if (params.get("canceled") === "1") {
+      toast("Payment canceled. Your basket is unchanged.");
+      window.history.replaceState({}, "", "checkout.html");
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const cart = loadCart();
+      const items = Object.values(cart.items || {});
+      if (!items.length) {
+        toast("Your basket is empty.");
+        return;
+      }
+
+      const missingPriceIds = items.filter((item) => !item.stripePriceId);
+      if (missingPriceIds.length) {
+        toast("Some products are missing Stripe price IDs.");
+        return;
+      }
+
+      const submitBtn = form.querySelector(".checkout-submit-btn");
+      const defaultSubmitText = submitBtn ? submitBtn.textContent : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Redirecting...";
+      }
+
+      const formData = new FormData(form);
+      const customer = {
+        email: String(formData.get("email") || "").trim(),
+        phone: String(formData.get("phone") || "").trim(),
+        firstName: String(formData.get("first_name") || "").trim(),
+        lastName: String(formData.get("last_name") || "").trim(),
+        address1: String(formData.get("address_line_1") || "").trim(),
+        address2: String(formData.get("address_line_2") || "").trim(),
+        city: String(formData.get("city") || "").trim(),
+        postcode: String(formData.get("postcode") || "").trim(),
+        country: String(formData.get("country") || "").trim()
+      };
+
+      const payload = {
+        items: items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.qty,
+          stripePriceId: item.stripePriceId
+        })),
+        customer
+      };
+
+      try {
+        const res = await fetch("/api/create-checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          let message = "Unable to start Stripe checkout.";
+          try {
+            const body = await res.json();
+            if (body && body.error) message = body.error;
+          } catch {}
+          throw new Error(message);
+        }
+
+        const body = await res.json();
+        if (!body || !body.url) {
+          throw new Error("Stripe did not return a checkout URL.");
+        }
+
+        window.location.href = body.url;
+      } catch (err) {
+        console.error(err);
+        toast(err.message || "Unable to start Stripe checkout.");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = defaultSubmitText || "Continue to Secure Payment";
+        }
+      }
+    });
+  };
+/* =========================================================
+   STRIPE -> SHOP PRODUCTS (via Netlify function)
+   ========================================================= */
+
+async function fetchProductsFromStripe() {
+  const res = await fetch("/api/list-products", { cache: "no-store" });
+  if (!res.ok) {
+    let message = "Could not load products from Stripe.";
+    try {
+      const body = await res.json();
+      if (body && body.error) message = body.error;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const body = await res.json();
+  const products = Array.isArray(body.products) ? body.products : [];
+  return products.filter((p) => p && p.id && p.name && p.stripePriceId);
+}
+
+async function renderShopFromStripe() {
+  const grid = document.getElementById("product-grid");
+  if (!grid) return;
+
+  grid.innerHTML = `<p style="opacity:.8">Loading products...</p>`;
+
+  try {
+    const products = await fetchProductsFromStripe();
+
+    if (!products.length) {
+      grid.innerHTML = `<p style="opacity:.8">No products available right now.</p>`;
+      return;
+    }
+
+    grid.innerHTML = "";
+
+    for (const p of products) {
+      const card = document.createElement("div");
+      card.className = "product-card";
+      card.setAttribute("data-product-id", p.id);
+
+      card.innerHTML = `
+        <div class="product-card-image">
+          <img src="${escapeAttr(p.image || "assets/placeholder.svg")}" alt="${escapeAttr(p.name)}">
+          ${p.badge ? `<span class="product-badge">${escapeHtml(p.badge)}</span>` : ""}
+        </div>
+
+        <div class="product-card-body">
+          <h3 class="product-card-name">${escapeHtml(p.name)}</h3>
+          <p class="product-card-description">${escapeHtml(p.description || "")}</p>
+
+          <div class="product-card-footer">
+            <span class="product-card-price">${formatGBP(p.price)}</span>
+            <button
+              class="btn btn-primary btn-add-to-basket"
+              data-product-id="${escapeAttr(p.id)}"
+              data-stripe-price-id="${escapeAttr(p.stripePriceId)}"
+            >
+              Add to Basket
+            </button>
+          </div>
+        </div>
+      `;
+
+      grid.appendChild(card);
+    }
+
+    initShop();
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = `<p style="opacity:.8">Could not load products. Check Stripe keys and Netlify functions.</p>`;
+  }
+}
+// Tiny escaping helpers (prevent HTML injection)
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+  }[m]));
+}
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/`/g, "&#096;");
+}
+
+  // ---------- boot ----------
+  document.addEventListener("DOMContentLoaded", () => {
+    updateBasketBadge();     // always update badge on any page
+    renderShopFromStripe();
+    renderBasket();          // only runs if basket elements exist
+    initBasketInteractions();// only runs on basket page
+    renderCheckoutSummary(); // only runs if checkout elements exist
+    initCheckoutSubmit();    // only runs on checkout page
+  });
+})();
 
 /* =====================================================
    CONTACT FORM
@@ -630,22 +1126,60 @@ function initContactForm() {
 
   if (!form) return;
 
-  form.addEventListener('submit', function(e) {
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const isFormspree = (form.getAttribute('action') || '').includes('formspree.io');
+
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     // Simple validation
-    const name = form.querySelector('[name="name"]').value;
-    const email = form.querySelector('[name="email"]').value;
-    const message = form.querySelector('[name="message"]').value;
+    const name = (form.querySelector('[name="name"]')?.value || '').trim();
+    const email = (form.querySelector('[name="email"]')?.value || '').trim();
+    const message = (form.querySelector('[name="message"]')?.value || '').trim();
 
     if (!name || !email || !message) {
       alert('Please fill in all required fields.');
       return;
     }
 
-    // Show success message
-    if (formContainer && successMessage) {
-      formContainer.innerHTML = successMessage.innerHTML;
+    if (!isFormspree) {
+      if (formContainer && successMessage) {
+        formContainer.innerHTML = successMessage.innerHTML;
+      }
+      return;
+    }
+
+    const formData = new FormData(form);
+    const defaultSubmitText = submitBtn ? submitBtn.textContent : '';
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+    }
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!res.ok) {
+        throw new Error('Unable to send message. Please try again.');
+      }
+
+      if (formContainer && successMessage) {
+        formContainer.innerHTML = successMessage.innerHTML;
+      }
+
+      form.reset();
+    } catch (err) {
+      alert(err.message || 'Unable to send message. Please try again.');
+    } finally {
+      if (submitBtn && document.body.contains(submitBtn)) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = defaultSubmitText || 'Send Message';
+      }
     }
   });
 
@@ -666,3 +1200,80 @@ function initContactForm() {
     });
   }
 }
+
+/* =====================================================
+   CLOUDFLARE ZARAZ TRACKING
+   ===================================================== */
+(function initZarazTracking() {
+  function track(eventName, props) {
+    try {
+      if (window.zaraz && typeof zaraz.track === "function") {
+        zaraz.track(eventName, props);
+      }
+    } catch (err) {
+      console.warn("Zaraz track failed", err);
+    }
+  }
+
+  function getZarazDataProps(el) {
+    const props = {};
+    const dataset = el && el.dataset ? el.dataset : {};
+
+    Object.entries(dataset).forEach(([key, value]) => {
+      if (!key.startsWith("zaraz") || key === "zarazEvent") return;
+      const raw = key.slice(5); // remove "zaraz"
+      if (!raw) return;
+      const propName = raw.charAt(0).toLowerCase() + raw.slice(1);
+      props[propName] = value;
+    });
+
+    return props;
+  }
+
+  function getFilenameFromHref(href) {
+    if (!href) return "";
+    const clean = href.split("#")[0].split("?")[0];
+    const parts = clean.split("/");
+    return decodeURIComponent(parts[parts.length - 1] || "");
+  }
+
+  function getFileTypeFromHref(href) {
+    const match = String(href || "").match(/\.([a-z0-9]+)(\?|#|$)/i);
+    return match ? match[1].toLowerCase() : "";
+  }
+
+  document.addEventListener("click", function (e) {
+    const el = e.target.closest("a[href], [data-zaraz-event]");
+    if (!el) return;
+
+    const href = el.getAttribute("href") || "";
+    const page = window.location.pathname;
+    const linkText = (el.textContent || "").trim().slice(0, 120);
+
+    // Track downloads of EPUB/PDF
+    const isDownload = /\.(epub|pdf)(\?|#|$)/i.test(href);
+    if (isDownload) {
+      track("file_download", {
+        filename: getFilenameFromHref(href),
+        category: "ebook",
+        page,
+        href,
+        filetype: getFileTypeFromHref(href),
+        link_text: linkText
+      });
+    }
+
+    // Track any element with data-zaraz-event
+    const customEvent = el.getAttribute("data-zaraz-event");
+    if (customEvent) {
+      const props = getZarazDataProps(el);
+      if (!("page" in props)) props.page = page;
+      if (!("href" in props) && href) props.href = href;
+      if (!("link_text" in props) && linkText) props.link_text = linkText;
+      track(customEvent, props);
+    }
+  });
+})();
+
+
+
