@@ -273,12 +273,12 @@ Easy recommendation for me, give it a crack I don't think you will regret it."`
       {
         type: 'cta',
         title: 'Get Your Copy',
-        coverSmall: 'assets/book1-cover.jpg',
+        coverSmall: 'assets/book1-cover.webp',
         bookTitle: 'Gone Before The Moon',
         genre: 'Supernatural Thriller / Sci-Fi',
         pagesCount: '249 pages',
         buttons: [
-          { label: 'Buy on Amazon', className: 'btn btn-amazon', url: 'PASTE AMAZON LINK' },
+          { label: 'Buy It Here!', className: 'btn btn-amazon', url: 'shop.html' },
           { label: 'TikTok Shop', className: 'btn btn-tiktok', url: 'PASTE TIKTOK LINK' }
         ]
       }
@@ -289,9 +289,9 @@ Easy recommendation for me, give it a crack I don't think you will regret it."`
   'maw': {
     title: 'Into the Maw',
     pages: [
-      { type: 'cover', image: 'assets/books/maw-cover.jpg', title: 'Into the Maw' },
+      { type: 'cover', image: 'assets/books/maw-cover.webp', title: 'Into the Maw' },
       { type: 'excerpt', title: 'The Descent', content: '...' },
-      { type: 'image', image: 'assets/concept-art/maw-scene.jpg', caption: 'The cave entrance' },
+      { type: 'image', image: 'assets/concept-art/maw-scene.webp', caption: 'The cave entrance' },
       { type: 'characters', title: 'Characters', characters: [] },
       { type: 'about', title: 'About This Book', content: '...', releaseDate: 'Coming 2025' }
     ]
@@ -650,6 +650,12 @@ window.addEventListener('resize', function() {
     return Math.min(max, Math.max(min, n));
   };
 
+  const normalizeStock = (value) => {
+    const raw = value === null || value === undefined ? "" : value;
+    const n = Number.parseInt(String(raw), 10);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+
   const loadCart = () => {
     try {
       const raw = localStorage.getItem(CART_KEY);
@@ -716,11 +722,30 @@ window.addEventListener('resize', function() {
 
     const cart = loadCart();
     const existing = cart.items[product.id];
+    const incomingStock = normalizeStock(product.stock);
+    const existingStock = existing ? normalizeStock(existing.stock) : null;
+    const effectiveStock = incomingStock !== null ? incomingStock : existingStock;
+    let added = false;
+
+    if (effectiveStock !== null && effectiveStock <= 0) {
+      toast("Out of stock.");
+      return;
+    }
 
     if (existing) {
-      existing.qty = clampInt((existing.qty || 0) + 1, 1, 999);
+      const nextQty = (existing.qty || 0) + 1;
+      const maxQty = effectiveStock !== null ? Math.min(999, effectiveStock) : 999;
+      if (effectiveStock !== null && nextQty > effectiveStock) {
+        toast(`Only ${effectiveStock} left in stock.`);
+      } else {
+        existing.qty = clampInt(nextQty, 1, maxQty);
+        added = true;
+      }
       if (!existing.stripePriceId && product.stripePriceId) {
         existing.stripePriceId = product.stripePriceId;
+      }
+      if (incomingStock !== null) {
+        existing.stock = incomingStock;
       }
     } else {
       cart.items[product.id] = {
@@ -729,19 +754,28 @@ window.addEventListener('resize', function() {
         price: Number(product.price) || 0,
         image: product.image || "",
         stripePriceId: product.stripePriceId || "",
-        qty: 1
+        qty: 1,
+        stock: incomingStock
       };
+      added = true;
     }
 
     saveCart(cart);
     updateBasketBadge();
-    toast("Added to basket");
+    if (added) {
+      toast("Added to basket");
+    }
   };
 
   const setQty = (id, qty) => {
     const cart = loadCart();
     if (!cart.items[id]) return;
-    const newQty = clampInt(qty, 0, 999);
+    const stock = normalizeStock(cart.items[id].stock);
+    const maxQty = stock !== null ? Math.min(999, stock) : 999;
+    const newQty = clampInt(qty, 0, maxQty);
+    if (stock !== null && qty > stock) {
+      toast(`Only ${stock} left in stock.`);
+    }
     if (newQty <= 0) {
       delete cart.items[id];
     } else {
@@ -779,8 +813,9 @@ window.addEventListener('resize', function() {
         const imgEl = card.querySelector(".product-card-image img");
         const image = imgEl?.getAttribute("src") || "";
         const stripePriceId = btn.getAttribute("data-stripe-price-id") || "";
+        const stock = btn.getAttribute("data-stock");
 
-        addToCart({ id, name, price, image, stripePriceId });
+        addToCart({ id, name, price, image, stripePriceId, stock });
       });
     });
   };
@@ -838,6 +873,12 @@ window.addEventListener('resize', function() {
 
       row.querySelector(".basket-item-name").textContent = item.name;
       row.querySelector(".basket-item-price").textContent = formatGBP(item.price);
+      const stock = normalizeStock(item.stock);
+      const increaseBtn = row.querySelector(".qty-btn.qty-increase");
+      if (increaseBtn && stock !== null && item.qty >= stock) {
+        increaseBtn.disabled = true;
+        increaseBtn.title = "No more stock available";
+      }
 
       itemsRoot.insertBefore(row, emptyState || null);
     });
@@ -1042,9 +1083,9 @@ async function fetchProductsFromStripe() {
   return products.filter((p) => p && p.id && p.name && p.stripePriceId);
 }
 
-async function renderShopFromStripe() {
-  const grid = document.getElementById("product-grid");
-  if (!grid) return;
+  async function renderShopFromStripe() {
+    const grid = document.getElementById("product-grid");
+    if (!grid) return;
 
   grid.innerHTML = `<p style="opacity:.8">Loading products...</p>`;
 
@@ -1059,6 +1100,8 @@ async function renderShopFromStripe() {
     grid.innerHTML = "";
 
     for (const p of products) {
+      const stock = normalizeStock(p.stock);
+      const outOfStock = stock !== null && stock <= 0;
       const card = document.createElement("div");
       card.className = "product-card";
       card.setAttribute("data-product-id", p.id);
@@ -1079,8 +1122,10 @@ async function renderShopFromStripe() {
               class="btn btn-primary btn-add-to-basket"
               data-product-id="${escapeAttr(p.id)}"
               data-stripe-price-id="${escapeAttr(p.stripePriceId)}"
+              data-stock="${stock !== null ? stock : ""}"
+              ${outOfStock ? "disabled" : ""}
             >
-              Add to Basket
+              ${outOfStock ? "Out of Stock" : "Add to Basket"}
             </button>
           </div>
         </div>
