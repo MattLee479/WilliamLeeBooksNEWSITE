@@ -68,7 +68,7 @@ const adjustStockFromSession = async (stripeClient, sessionId) => {
 app.use(express.static(path.join(__dirname)));
 
 // Stripe webhook needs raw body
-app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
+app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
   if (!stripe || !webhookSecret) {
     return sendJson(res, 500, { error: "Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET." });
   }
