@@ -162,6 +162,35 @@ app.get("/api/list-products", async (req, res) => {
   }
 });
 
+app.get("/api/checkout-session-status", async (req, res) => {
+  if (!stripe) {
+    return sendJson(res, 500, { error: "Missing STRIPE_SECRET_KEY." });
+  }
+
+  const sessionId = String(req.query.session_id || "").trim();
+  if (!sessionId || !sessionId.startsWith("cs_")) {
+    return sendJson(res, 400, { error: "Missing or invalid session_id." });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    return sendJson(res, 200, {
+      id: session.id,
+      paymentStatus: session.payment_status || null,
+      sessionStatus: session.status || null,
+      customerEmail:
+        (session.customer_details && session.customer_details.email) ||
+        session.customer_email ||
+        "",
+      amountTotal: typeof session.amount_total === "number" ? session.amount_total : null,
+      currency: session.currency || null
+    });
+  } catch (err) {
+    return sendJson(res, 500, { error: err.message || "Failed to load Stripe checkout session." });
+  }
+});
+
 app.post("/api/create-checkout-session", async (req, res) => {
   if (!stripe) {
     return sendJson(res, 500, { error: "Missing STRIPE_SECRET_KEY." });
@@ -220,7 +249,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
-      success_url: `${siteUrl}/checkout.html?success=1&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${siteUrl}/order-complete.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/checkout.html?canceled=1`,
       customer_email: customer.email || undefined,
       billing_address_collection: "required",

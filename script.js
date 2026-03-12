@@ -975,11 +975,11 @@ window.addEventListener('resize', function() {
 
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") === "1") {
-      clearCart();
-      updateBasketBadge();
-      renderCheckoutSummary();
-      toast("Payment successful. Thank you for your order.");
-      window.history.replaceState({}, "", "checkout.html");
+      const sessionId = String(params.get("session_id") || "").trim();
+      if (sessionId) {
+        window.location.replace(`order-complete.html?session_id=${encodeURIComponent(sessionId)}`);
+        return;
+      }
     } else if (params.get("canceled") === "1") {
       toast("Payment canceled. Your basket is unchanged.");
       window.history.replaceState({}, "", "checkout.html");
@@ -1062,6 +1062,131 @@ window.addEventListener('resize', function() {
         }
       }
     });
+  };
+
+  const formatCurrencyFromMinor = (amountMinor, currencyCode) => {
+    if (!Number.isFinite(amountMinor)) return "N/A";
+    const currency = String(currencyCode || "GBP").toUpperCase();
+    try {
+      return new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency
+      }).format(amountMinor / 100);
+    } catch {
+      return formatGBP(amountMinor / 100);
+    }
+  };
+
+  const setOrderCompleteState = (statusEl, headingEl, messageEl, tone, heading, message) => {
+    if (statusEl) {
+      statusEl.classList.remove("is-success", "is-warning", "is-error");
+      if (tone) statusEl.classList.add(`is-${tone}`);
+    }
+    if (headingEl) headingEl.textContent = heading;
+    if (messageEl) messageEl.textContent = message;
+  };
+
+  const initOrderCompletePage = async () => {
+    if (!document.getElementById("order-complete-state")) return;
+
+    const statusEl = document.getElementById("order-complete-status");
+    const headingEl = document.getElementById("order-complete-heading");
+    const messageEl = document.getElementById("order-complete-message");
+    const orderIdEl = document.getElementById("order-complete-id");
+    const emailEl = document.getElementById("order-complete-email");
+    const totalEl = document.getElementById("order-complete-total");
+
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = String(params.get("session_id") || "").trim();
+    if (!sessionId) {
+      setOrderCompleteState(
+        statusEl,
+        headingEl,
+        messageEl,
+        "error",
+        "Order not confirmed",
+        "We could not find your payment reference. Please contact support if you were charged."
+      );
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = "Checking payment status...";
+    if (orderIdEl) orderIdEl.textContent = sessionId;
+
+    try {
+      const res = await fetch(
+        `/api/checkout-session-status?session_id=${encodeURIComponent(sessionId)}`,
+        { cache: "no-store" }
+      );
+
+      if (!res.ok) {
+        let message = "Unable to verify payment status.";
+        try {
+          const body = await res.json();
+          if (body && body.error) message = body.error;
+        } catch {}
+        throw new Error(message);
+      }
+
+      const body = await res.json();
+      const paid = String(body.paymentStatus || "").toLowerCase() === "paid";
+      const sessionStatus = String(body.sessionStatus || "").toLowerCase();
+
+      if (paid) {
+        clearCart();
+        updateBasketBadge();
+        setOrderCompleteState(
+          statusEl,
+          headingEl,
+          messageEl,
+          "success",
+          "Order complete",
+          "Payment received successfully. A confirmation email will arrive shortly."
+        );
+      } else if (sessionStatus === "open") {
+        setOrderCompleteState(
+          statusEl,
+          headingEl,
+          messageEl,
+          "warning",
+          "Payment pending",
+          "Your checkout is still open. Please complete payment in Stripe to finish your order."
+        );
+      } else {
+        setOrderCompleteState(
+          statusEl,
+          headingEl,
+          messageEl,
+          "error",
+          "Payment not completed",
+          "This order has not been paid. Please try checkout again."
+        );
+      }
+
+      if (statusEl) {
+        statusEl.textContent = paid
+          ? "Payment received"
+          : sessionStatus === "open"
+            ? "Awaiting payment"
+            : "Payment not completed";
+      }
+
+      if (orderIdEl && body.id) orderIdEl.textContent = body.id;
+      if (emailEl) emailEl.textContent = body.customerEmail || "N/A";
+      if (totalEl) totalEl.textContent = formatCurrencyFromMinor(body.amountTotal, body.currency);
+    } catch (err) {
+      console.error(err);
+      setOrderCompleteState(
+        statusEl,
+        headingEl,
+        messageEl,
+        "error",
+        "Unable to verify payment",
+        err.message || "Please contact support if you were charged."
+      );
+      if (emailEl) emailEl.textContent = "N/A";
+      if (totalEl) totalEl.textContent = "N/A";
+    }
   };
 /* =========================================================
    STRIPE -> SHOP PRODUCTS (via Netlify function)
@@ -1158,6 +1283,7 @@ function escapeAttr(str) {
     initBasketInteractions();// only runs on basket page
     renderCheckoutSummary(); // only runs if checkout elements exist
     initCheckoutSubmit();    // only runs on checkout page
+    initOrderCompletePage(); // only runs on order complete page
   });
 })();
 
