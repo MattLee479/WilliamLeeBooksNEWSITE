@@ -8,6 +8,7 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const siteUrl = (process.env.SITE_URL || "").replace(/\/+$/, "");
 const shippingRateId = String(process.env.STRIPE_SHIPPING_RATE_ID || "").trim();
+const ALLOWED_ORDER_COUNTRY = "GB";
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -203,9 +204,14 @@ app.post("/api/create-checkout-session", async (req, res) => {
   const payload = req.body && typeof req.body === "object" ? req.body : {};
   const items = Array.isArray(payload.items) ? payload.items : [];
   const customer = payload.customer && typeof payload.customer === "object" ? payload.customer : {};
+  const customerCountry = String(customer.country || "").trim().toUpperCase();
 
   if (!items.length) {
     return sendJson(res, 400, { error: "Basket is empty." });
+  }
+
+  if (customerCountry !== ALLOWED_ORDER_COUNTRY) {
+    return sendJson(res, 400, { error: "Orders are currently limited to Great Britain delivery addresses." });
   }
 
   const lineItems = [];
@@ -254,7 +260,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       customer_email: customer.email || undefined,
       billing_address_collection: "required",
       shipping_address_collection: {
-        allowed_countries: ["GB", "US", "IE", "CA", "AU"]
+        allowed_countries: [ALLOWED_ORDER_COUNTRY]
       },
       phone_number_collection: { enabled: true },
       shipping_options: shippingOptions.length ? shippingOptions : undefined,
@@ -267,7 +273,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         address_2: customer.address2 || "",
         city: customer.city || "",
         postcode: customer.postcode || "",
-        country: customer.country || ""
+        country: customerCountry
       }
     });
 
