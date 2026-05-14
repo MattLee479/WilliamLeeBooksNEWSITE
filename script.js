@@ -285,6 +285,56 @@ Easy recommendation for me, give it a crack I don't think you will regret it."`
     ]
   },
 
+  'fieldwalker': {
+    title: 'The Field Walker',
+    pages: [
+      {
+        type: 'cover',
+        image: 'assets/TheFieldWalker.webp',
+        title: 'The Field Walker'
+      },
+      {
+        type: 'about',
+        releaseDate: 'Coming Soon',
+        title: 'The Field Walker',
+        content: `Add the main one or two paragraph blurb for The Field Walker here.
+
+Use this page for the spoiler-free hook that sells the story, its place in the Black Veil timeline, and why readers should keep an eye on it.`
+      },
+      {
+        type: 'characters',
+        title: 'Characters',
+        characters: [
+          {
+            name: 'Main Character',
+            description: 'Add the lead character summary here.'
+          },
+          {
+            name: 'Key Supporting Character',
+            description: 'Add the most important supporting character here.'
+          },
+          {
+            name: 'Main Threat / Mystery',
+            description: 'Add the central threat, mystery, or antagonist here.'
+          }
+        ]
+      },
+      {
+        type: 'cta',
+        header: 'Coming Soon',
+        title: 'Stay Updated',
+        coverSmall: 'assets/TheFieldWalker.webp',
+        bookTitle: 'The Field Walker',
+        genre: 'Add genre / subgenre here',
+        pagesCount: 'Add release date or format here',
+        buttons: [
+          { label: 'Join Newsletter', className: 'btn btn-primary', url: 'contact.html' },
+          { label: 'Contact William', className: 'btn btn-secondary', url: 'contact.html' }
+        ]
+      }
+    ]
+  },
+
   // Keep your other book(s) as-is (optional)
   'maw': {
     title: 'Into the Maw',
@@ -531,7 +581,7 @@ function renderPage(page, pageNum, pageClass) {
       }).join('');
 
       content = `
-        <div class="page-header">Available Now</div>
+        <div class="page-header">${page.header || 'Available Now'}</div>
         <h3 class="page-title">${page.title || 'Get Your Copy'}</h3>
 
         <div class="book-info">
