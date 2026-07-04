@@ -32,6 +32,15 @@ const getProductStock = (product) => {
   return parseStock(product.metadata.stock);
 };
 
+const getDefaultPriceId = (product) => {
+  if (!product || !product.default_price) return "";
+  if (typeof product.default_price === "string") return product.default_price;
+  if (typeof product.default_price === "object" && product.default_price.id) {
+    return product.default_price.id;
+  }
+  return "";
+};
+
 const adjustStockFromSession = async (stripeClient, sessionId) => {
   if (!stripeClient || !sessionId) return;
 
@@ -129,17 +138,26 @@ app.get("/api/list-products", async (req, res) => {
   }
 
   try {
-    const priceResponse = await stripe.prices.list({
+    const productResponse = await stripe.products.list({
       active: true,
-      type: "one_time",
-      expand: ["data.product"],
+      expand: ["data.default_price"],
       limit: 100
     });
 
-    const products = priceResponse.data
-      .filter((price) => price.currency === "gbp" && price.product && price.product.active)
-      .map((price) => {
-        const product = price.product;
+    const products = productResponse.data
+      .map((product) => {
+        const defaultPrice = product && typeof product.default_price === "object"
+          ? product.default_price
+          : null;
+
+        if (!product || !product.active || !defaultPrice || !defaultPrice.active) {
+          return null;
+        }
+
+        if (defaultPrice.type !== "one_time" || defaultPrice.currency !== "gbp") {
+          return null;
+        }
+
         const image = Array.isArray(product.images) && product.images.length
           ? product.images[0]
           : "";
@@ -147,15 +165,16 @@ app.get("/api/list-products", async (req, res) => {
 
         return {
           id: product.id,
-          stripePriceId: price.id,
+          stripePriceId: getDefaultPriceId(product),
           name: product.name || "Untitled product",
           description: product.description || "",
           image,
           badge: "",
-          price: typeof price.unit_amount === "number" ? price.unit_amount / 100 : 0,
+          price: typeof defaultPrice.unit_amount === "number" ? defaultPrice.unit_amount / 100 : 0,
           stock
         };
-      });
+      })
+      .filter(Boolean);
 
     return sendJson(res, 200, { products });
   } catch (err) {
@@ -244,6 +263,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
       const price = await stripe.prices.retrieve(priceId, { expand: ["product"] });
       const product = price && typeof price.product === "object" ? price.product : null;
       if (!product) continue;
+
+      const defaultPriceId = getDefaultPriceId(product);
+      if (!defaultPriceId || price.id !== defaultPriceId) {
+        const name = product.name || "This item";
+        return sendJson(res, 400, { error: `${name} is not using its default Stripe price.` });
+      }
 
       const stock = getProductStock(product);
       if (stock !== null && requestedQty > stock) {

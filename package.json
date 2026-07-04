@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Static client website with Stripe Checkout serverless functions",
   "scripts": {
-    "dev": "netlify dev",
+    "dev": "npx netlify dev",
     "start": "node server.js"
   },
   "dependencies": {
